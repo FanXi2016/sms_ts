@@ -14,7 +14,7 @@ typedef struct sms_coding_pdu_message_s {
 } sms_coding_pdu_message_s_type;
 
 
-extern int sms_coding_pdu_submit(char *dest_address, char *user_data, uint32 user_data_len, sms_coding_pdu_message_s_type *pdu);
+extern int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_coding_pdu_message_s_type *pdu);
 
 
 #endif /* SMS_CODING_PROC_H_ */
