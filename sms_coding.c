@@ -1,9 +1,10 @@
-#include "sms_err.h"
-#include "sms_log.h"
 
 #include "wms.h"
 #include "wmsts.h"
-#include "sms_coding_proc.h"
+
+#include "sms_err.h"
+#include "sms_log.h"
+#include "sms_coding.h"
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -22,7 +23,7 @@ static int _StringAllIsDigit(char *string)
         #else
         SMS_ERR(LOG_TAG,"Err, String is NULL pointer.");
         #endif
-        return SMS_ERR_POINTER_NULL;
+        return SMS_ERR_NULL;
     }
 
     str_len = strlen(string);
@@ -32,7 +33,7 @@ static int _StringAllIsDigit(char *string)
         #else
         SMS_ERR(LOG_TAG,"Err, String length is empty.");
         #endif
-        return SMS_ERR_ADDR_LEN_EMPTY;
+        return SMS_ERR_LENGTH;
     }
 
     for (count = 0; count < str_len; count++)  {
@@ -69,7 +70,7 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
         #else
         SMS_ERR(LOG_TAG,"Err, Addrees or PUD address is NULL pointer.");
         #endif
-        return SMS_ERR_POINTER_NULL;
+        return SMS_ERR_NULL;
     }
 
     if (strlen(str_addr) == 0) {
@@ -78,7 +79,7 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
         #else
         SMS_ERR(LOG_TAG,"Err, Address length is empty.");
         #endif
-        return SMS_ERR_ADDR_LEN_EMPTY;
+        return SMS_ERR_LENGTH;
     }
 
     /* SMS address is international number of not. */
@@ -92,7 +93,7 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
 
     /* Check sms address, if it all of digit. */
     rc = _StringAllIsDigit(str_addr);
-    if (rc == SMS_ERR_POINTER_NULL || rc == SMS_ERR_ADDR_LEN_EMPTY) {
+    if (rc == SMS_ERR_NULL || rc == SMS_ERR_LENGTH) {
         return rc;
     }
 
@@ -107,6 +108,48 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
     wmsts_addr->number_plan = WMS_NUMBER_PLAN_TELEPHONY;
     wmsts_addr->number_of_digits = strlen(addr_ptr);
     memcpy(wmsts_addr->digits, addr_ptr, strlen(addr_ptr));
+
+    return SMS_SUCCESS;
+}
+
+/** @brief sms_coding_decode_address
+ *
+ *  
+ *
+ *  @param[in] str_addr: string format of sms destination address.
+ *  @param[in] wmsts_addr: wms type format address.
+ *
+ *  @return[integer]: function process state, failed or success.
+ */
+static int sms_coding_decode_address(uint8 *str_addr, wms_address_s_type *wmsts_addr)
+{
+    uint8 addr_ptr = NULL;
+    uint8 addr_length = 0;
+
+    if (str_addr == NULL || wmsts_addr == NULL) {
+        SMS_ERR("Err, Addrees or PUD address is NULL pointer.");
+        return SMS_ERR_NULL;
+    }
+
+    addr_ptr = str_addr;
+    addr_length = *addr_ptr;
+    if (addr_length > 24) {  /* 3GPP 23.040 9.1.2.5 - 12 octets */
+        SMS_ERR("Err, Addrees is too long(%d).", addr_length);
+        return SMS_ERR_LENGTH;
+    }
+    addr_ptr++;
+
+    wmsts_addr->number_type = (wms_number_type_e_type)((*addr_ptr & 0x70) >> 4);
+    wmsts_addr->number_plan = (wms_number_plan_e_type)(*addr_ptr & 0x0F);
+
+    if (wmsts_addr->number_type == WMS_NUMBER_ALPHANUMERIC) {  /* GSM 7-bit */
+        wmsts_addr->digit_mode = WMS_DIGIT_MODE_8_BIT;
+
+    } else {
+        wmsts_addr->digit_mode = WMS_DIGIT_MODE_4_BIT;
+        wmsts_addr->number_of_digits = addr_length;
+
+    }
 
     return SMS_SUCCESS;
 }
@@ -191,7 +234,7 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
         #else
         SMS_ERR(LOG_TAG,"Err, Addrees/Content or PDU is NULL pointer.");
         #endif
-        return SMS_ERR_POINTER_NULL;
+        return SMS_ERR_NULL;
     }
 
     memset(&wmsts_client, 0, sizeof(wms_client_ts_data_s_type));
@@ -230,16 +273,6 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
         return rc;
     }
 
-#if 0
-    SMS_ERR("address = %s.\n", address);
-    SMS_ERR("digit_mode = %d.\n", wmsts_client.u.gw_pp.u.submit.address.digit_mode);
-    SMS_ERR("number_mode = %d.\n", wmsts_client.u.gw_pp.u.submit.address.number_mode);
-    SMS_ERR("number_type = %d.\n", wmsts_client.u.gw_pp.u.submit.address.number_type);
-    SMS_ERR("number_plan = %d.\n", wmsts_client.u.gw_pp.u.submit.address.number_plan);
-    SMS_ERR("number_of_digits = %d.\n", wmsts_client.u.gw_pp.u.submit.address.number_of_digits);
-    SMS_ERR("digits = %s.\n", wmsts_client.u.gw_pp.u.submit.address.digits);
-#endif
-
     /* TP-PID */
     wmsts_client.u.gw_pp.u.submit.pid = WMS_PID_DEFAULT;
 
@@ -264,7 +297,7 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
         return SMS_ERR_SUBMIT;
     }
 
-#if 1
+#if 0
 #ifndef SMS_LOG_TAG
     SMS_ERR("content_len = %d, content = %s.\n", content_len, content);
 #else
@@ -286,4 +319,35 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
         memcpy(pdu->message, wmsts_response_data.data, wmsts_response_data.len);
     }
     return SMS_SUCCESS;
+}
+
+/** @brief sms_coding_pdu_submit
+ *
+ *  encode sms data to pdu submit format, 3GPP 23.040 [9.2].
+ *
+ *  @param[in] address: 
+ *  @param[in] content: 
+ *  @param[in] content_len: 
+ *  @param[in] pdu: 
+ *
+ *  @return
+ */
+int sms_decode_pdu_deliver(uint8 *pdu, uint32 pdu_len, sms_message_s_type *sms_message)
+{
+    uint8 pdu_ptr = NULL;
+
+    if (pdu == NULL || sms_message == NULL) {
+        return SMS_ERR_NULL;
+    }
+
+    if (pdu_len <= 0) {
+        return SMS_ERR_LENGTH;
+    }
+
+    pdu_ptr = pdu;
+    if (*pdu_ptr >= 0)
+
+
+
+
 }
