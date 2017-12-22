@@ -12,6 +12,7 @@ typedef struct sms_coding_pdu_message_s {
 
 } sms_coding_pdu_message_s_type;
 
+/*
 typedef enum {
     E_SMS_TAG_TYPE_UNKNOWN = 0,
     E_SMS_TAG_TYPE_MT_READ,
@@ -21,7 +22,7 @@ typedef enum {
     E_SMS_TAG_TYPE_STATUS_REPORT,
     E_SMS_TAG_TYPE_MAX,
 } e_sms_tag_type_enum;
-
+*/
 
 typedef enum {
     E_SMS_CONTENT_DCS_UNKNOWN = 0,
@@ -54,8 +55,8 @@ typedef struct sms_message_s {
 } sms_message_s_type;
 
 
-
 extern int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_coding_pdu_message_s_type *pdu);
+extern int sms_decode_pdu_deliver(uint8 *pdu, uint32 pdu_len, sms_message_s_type *sms_message);
 
 
 #endif /* _SMS_CODING_H_ */

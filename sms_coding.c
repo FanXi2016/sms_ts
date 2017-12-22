@@ -11,6 +11,53 @@
 #endif
 #define LOG_TAG "SMS"
 
+#define SMS_DEBUG_MODE
+
+#ifdef SMS_DEBUG_MODE
+static void _print_pdu(uint8 *pdu, uint32 pdu_len)
+{
+    uint32 pdu_idx = 0;
+
+    SMS_ERR("DG, pdu_len=%d\n", pdu_len);
+    for (pdu_idx = 0; pdu_idx < pdu_len; pdu_idx++){
+        SMS_ERR("DG, pdu[%d]=0x%X\n", pdu_idx, *(pdu + pdu_idx));
+    }
+}
+
+static void _print_sms(sms_message_s_type *sms)
+{
+#if 0
+    SMS_ERR("DG, smsc = %s.\n", sms->smsc);
+    SMS_ERR("DG, sender = %s.\n", sms->number);
+    SMS_ERR("DG, year = %d, month = %d, day = %d.\n", sms->validity.year, sms->validity.month, sms->validity.date);
+    SMS_ERR("DG, hour = %d, min = %d, sec = %d.\n", sms->validity.hour, sms->validity.min, sms->validity.sec);
+    SMS_ERR("DG, time_zone = %d.\n", sms->validity.timezone);
+    SMS_ERR("DG, content_dcs = %d.\n", sms->content_dcs);
+    
+    SMS_ERR("DG, content_len = %d.\n", sms->content_len);
+    SMS_ERR("DG, content = %s.\n", sms->content);
+#else
+    int index = 0;
+
+    for (index = 0; index < strlen(sms->smsc); index++) {
+        SMS_ERR("DG, smsc[%d] = 0x%X.\n", index, sms->smsc[index]);
+    }
+    //SMS_ERR("DG, sender = %s.\n", sms->number);
+    SMS_ERR("DG, year = %d, month = %d, day = %d.\n", sms->validity.year, sms->validity.month, sms->validity.date);
+    SMS_ERR("DG, hour = %d, min = %d, sec = %d.\n", sms->validity.hour, sms->validity.min, sms->validity.sec);
+    SMS_ERR("DG, time_zone = %d.\n", sms->validity.timezone);
+    SMS_ERR("DG, content_dcs = %d.\n", sms->content_dcs);
+
+    SMS_ERR("DG, content_len = %d.\n", sms->content_len);
+    for (index = 0; index < sms->content_len; index++) {
+        SMS_ERR("DG, content[index] = 0x%X.\n", index, sms->content[index]);
+    }
+    //SMS_ERR("DG, content = %s.\n", sms->content);
+
+#endif
+}
+#endif
+
 
 static int _StringAllIsDigit(char *string)
 {
@@ -112,6 +159,7 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
     return SMS_SUCCESS;
 }
 
+#if 0
 /** @brief sms_coding_decode_address
  *
  *  
@@ -121,38 +169,61 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
  *
  *  @return[integer]: function process state, failed or success.
  */
-static int sms_coding_decode_address(uint8 *str_addr, wms_address_s_type *wmsts_addr)
+static int sms_coding_decode_address(uint8 *pdu_addr, uint8 *decode_addr)
 {
-    uint8 addr_ptr = NULL;
+    uint8 addr_idx = 0;
     uint8 addr_length = 0;
+    uint8 *addr_ptr = NULL;
+    wms_address_s_type wmsts_addr;
 
-    if (str_addr == NULL || wmsts_addr == NULL) {
+    if (pdu_addr == NULL || decode_addr == NULL) {
         SMS_ERR("Err, Addrees or PUD address is NULL pointer.");
         return SMS_ERR_NULL;
     }
 
-    addr_ptr = str_addr;
+    memset(&wmsts_addr, 0, sizeof(wms_address_s_type));
+
+    addr_ptr = pdu_addr;
     addr_length = *addr_ptr;
     if (addr_length > 24) {  /* 3GPP 23.040 9.1.2.5 - 12 octets */
         SMS_ERR("Err, Addrees is too long(%d).", addr_length);
         return SMS_ERR_LENGTH;
+    } else if (addr_length <= 0) {
+        SMS_ERR("Err, Addrees is empty(%d).", addr_length);
+        return SMS_ERR_LENGTH;
+    } else {
+        /* Nothing to do. */
     }
     addr_ptr++;
 
-    wmsts_addr->number_type = (wms_number_type_e_type)((*addr_ptr & 0x70) >> 4);
-    wmsts_addr->number_plan = (wms_number_plan_e_type)(*addr_ptr & 0x0F);
+    wmsts_addr.number_type = (wms_number_type_e_type)((*addr_ptr & 0x70) >> 4);
+    wmsts_addr.number_plan = (wms_number_plan_e_type)(*addr_ptr & 0x0F);
+    addr_ptr++;
 
-    if (wmsts_addr->number_type == WMS_NUMBER_ALPHANUMERIC) {  /* GSM 7-bit */
-        wmsts_addr->digit_mode = WMS_DIGIT_MODE_8_BIT;
+    if (wmsts_addr.number_type == WMS_NUMBER_ALPHANUMERIC) {  /* GSM 7-bit */
+        wmsts_addr.digit_mode = WMS_DIGIT_MODE_8_BIT;
 
+        /* Need Coding. */
     } else {
-        wmsts_addr->digit_mode = WMS_DIGIT_MODE_4_BIT;
-        wmsts_addr->number_of_digits = addr_length;
+        wmsts_addr.digit_mode = WMS_DIGIT_MODE_4_BIT;
+        wmsts_addr.number_of_digits = addr_length;
 
+        for (addr_idx = 0; addr_idx < wmsts_addr.number_of_digits; addr_idx++) {
+            wmsts_addr.digits[addr_idx] = (*(addr_ptr + addr_idx) & 0x0F) + '0';
+            wmsts_addr.digits[addr_idx + 1] = ((*(addr_ptr + addr_idx) & 0xF0) >> 4) + '0';
+        }
+    }
+
+    if (wmsts_addr.number_type == WMS_NUMBER_INTERNATIONAL) {  /* International number, add '+' in number front. */
+        *decode_addr = '+';
+        memcpy((decode_addr + 1), &wmsts_addr.digits, wmsts_addr.number_of_digits);
+    } else {
+        memcpy(decode_addr, &wmsts_addr.digits, wmsts_addr.number_of_digits);
     }
 
     return SMS_SUCCESS;
 }
+#endif
 
 /** @brief sms_coding_encode_gw_dcs
  *
@@ -191,6 +262,42 @@ static void sms_coding_encode_gw_dcs(wms_gw_alphabet_e_type sms_alphabet, wms_gw
     wmsts_dcs->msg_waiting_kind = WMS_GW_MSG_WAITING_VOICEMAIL;
 }
 
+/** @brief sms_coding_decode_gw_dcs
+ *
+ *  decode sms content data coding scheme.
+ *
+ *  @param[in] wmsts_dcs: gw wms format of data coding scheme(dcs).
+ *  @param[in] sms_dcs: sms content data coding scheme.
+ *
+ *  @return[none]
+ */
+static void sms_coding_decode_gw_dcs(wms_gw_dcs_s_type *wmsts_dcs, e_sms_content_dcs_enum *sms_dcs)
+{
+    switch (wmsts_dcs->alphabet)
+    {
+        case WMS_GW_ALPHABET_7_BIT_DEFAULT:
+        {
+            *sms_dcs = E_SMS_CONTENT_DCS_GSM_7BIT;
+            break;
+        }
+        case WMS_GW_ALPHABET_8_BIT:
+        {
+            *sms_dcs = E_SMS_CONTENT_DCS_8BIT;
+            break;
+        }
+        case WMS_GW_ALPHABET_UCS2:
+        {
+            *sms_dcs = E_SMS_CONTENT_DCS_USC2;
+            break;
+        }
+        default:
+        {
+            *sms_dcs = E_SMS_CONTENT_DCS_UNKNOWN;
+            break;
+        }
+    }
+}
+
 /** @brief sms_coding_encode_gw_validity_period
  *
  *  encode sms validity period.
@@ -209,6 +316,26 @@ static void sms_coding_encode_gw_validity_period(wms_gw_validity_s_type *wmsts_v
     wmsts_validity_period->u.time.minute = 0;  /* 00 - 59 */
     wmsts_validity_period->u.time.second = 0;  /* 00 - 59 */
     wmsts_validity_period->u.time.timezone = 0;
+}
+
+/** @brief sms_coding_decode_gw_validity_period
+ *
+ *  decode sms validity period.
+ *
+ *  @param[in] pdu_validity: gw wms format of validity period.
+ *  @param[in] decode_validity: sms validity period format to show.
+ *
+ *  @return[none]
+ */
+static void sms_coding_decode_gw_validity_period(wms_timestamp_s_type *pdu_validity, sms_validity_period_s_type *decode_validity)
+{
+    decode_validity->year = pdu_validity->year;
+    decode_validity->month = pdu_validity->month;
+    decode_validity->date = pdu_validity->day;
+    decode_validity->hour = pdu_validity->hour;
+    decode_validity->min = pdu_validity->minute;
+    decode_validity->sec = pdu_validity->second;
+    decode_validity->timezone = pdu_validity->timezone;
 }
 
 /** @brief sms_coding_pdu_submit
@@ -297,22 +424,11 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
         return SMS_ERR_SUBMIT;
     }
 
-#if 0
-#ifndef SMS_LOG_TAG
-    SMS_ERR("content_len = %d, content = %s.\n", content_len, content);
-#else
-    SMS_ERR(LOG_TAG,"content_len = %d, content = %s.\n", content_len, content);
+#ifdef SMS_DEBUG_MODE
+    SMS_ERR("=====SUBMIT=====\n");
+    _print_pdu(&wmsts_response_data.data, wmsts_response_data.len);
 #endif
 
-    int index = 0;
-    for (index; index < wmsts_response_data.len; index++) {
-        #ifndef SMS_LOG_TAG
-        SMS_ERR("pdu[%d]=0x%2X.\n", index, wmsts_response_data.data[index]);
-        #else
-        SMS_ERR(LOG_TAG,"pdu[%d]=0x%2X.\n", index, wmsts_response_data.data[index]);
-        #endif
-    }
-#endif
 
     if (wmsts_response_data.len > 0) {
         pdu->message_len = wmsts_response_data.len;
@@ -321,20 +437,50 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
     return SMS_SUCCESS;
 }
 
-/** @brief sms_coding_pdu_submit
+static int sms_coding_decode_smsc(uint8 *pdu_message, uint8 *smsc)
+{
+    wms_address_s_type wmsts_addr;
+    uint8 pdu_ptr = NULL;
+    uint32 smsc_len = 0;
+    int shift = 0;
+    int rc = SMS_SUCCESS;
+
+    if (pdu_message == NULL || smsc == NULL) {
+        return SMS_ERR_NULL;
+    }
+    pdu_ptr = pdu_message;
+
+    if ((uint32)*pdu_ptr > 0) {
+        memset(&wmsts_addr, 0, sizeof(wms_address_s_type));
+        wms_ts_decode_address(pdu_ptr, &wmsts_addr);
+    } else if ((uint32)*pdu_ptr == 0) {
+        smsc_len = 0;
+        shift = 1;
+    } else {
+        SMS_ERR("Err, SMSC number length.");
+        return SMS_ERR_LENGTH;
+    }
+
+}
+
+
+/** @brief sms_decode_pdu_deliver
  *
- *  encode sms data to pdu submit format, 3GPP 23.040 [9.2].
+ *  dncode pdu messsage to sms message format, 3GPP 23.040 [9.2].
  *
- *  @param[in] address: 
- *  @param[in] content: 
- *  @param[in] content_len: 
- *  @param[in] pdu: 
+ *  @param[in] pdu: Raw PDU message.
+ *  @param[in] pdu_len: PDU message length.
+ *  @param[out] sms_message: SMS message.
  *
- *  @return
+ *  @return[int]: function state, success or failed.
  */
 int sms_decode_pdu_deliver(uint8 *pdu, uint32 pdu_len, sms_message_s_type *sms_message)
 {
-    uint8 pdu_ptr = NULL;
+    wms_raw_ts_data_s_type wmsts_raw;
+    wms_client_ts_data_s_type wmsts_response;
+    uint8 *pdu_ptr = NULL;
+    uint32 smsc_len = 0;
+    int rc = SMS_SUCCESS;
 
     if (pdu == NULL || sms_message == NULL) {
         return SMS_ERR_NULL;
@@ -344,10 +490,68 @@ int sms_decode_pdu_deliver(uint8 *pdu, uint32 pdu_len, sms_message_s_type *sms_m
         return SMS_ERR_LENGTH;
     }
 
+#ifdef SMS_DEBUG_MODE
+    SMS_ERR("=====DELIVER=====\n");
+    _print_pdu(pdu, pdu_len);
+#endif
+
     pdu_ptr = pdu;
-    if (*pdu_ptr >= 0)
+    /* SMSC - SMS Center Number. */
+    if (((int)*pdu_ptr) > 0) {
+        smsc_len = ((int)*pdu_ptr);
+        rc = sms_coding_decode_address(pdu_ptr, &sms_message->smsc);
+        if (rc != SMS_SUCCESS) {
+            SMS_ERR("Err, Decode SMSC number.");
+            return SMS_ERR_DELIVER;
+        }
+
+        pdu_ptr = pdu_ptr + (smsc_len + 1);  /* Pointer to First octet of SMS-DELIVER message. */
+    } else if (*pdu_ptr == 0) {
+        pdu_ptr = pdu_ptr + 1;
+        SMS_INFO("Info, SMSC number is empty.");
+    } else {
+        SMS_ERR("Err, SMSC number length.");
+        return SMS_ERR_LENGTH;
+    }
 
 
+    memset(&wmsts_raw, 0, sizeof(wms_raw_ts_data_s_type));
+    memset(&wmsts_response, 0, sizeof(wms_client_ts_data_s_type));
+
+    wmsts_raw.format = WMS_FORMAT_GW_PP;
+    wmsts_raw.tpdu_type = WMS_TPDU_DELIVER;
+    wmsts_raw.len = pdu_len - (pdu_ptr - pdu);
+    memcpy(&wmsts_raw.data, pdu_ptr, wmsts_raw.len);
+
+    rc = wms_ts_decode(&wmsts_raw, &wmsts_response);
+    if (rc != WMS_OK_S) {
+        SMS_ERR("Err, Decode pdu message to WMS TS format.");
+        return SMS_ERR_DELIVER;
+    }
+
+    /* SMS Sender Number. */
+    if (wmsts_response.u.gw_pp.u.deliver.address.number_type == WMS_NUMBER_INTERNATIONAL) {
+        *sms_message->number = '+';
+        memcpy((&sms_message->number + 1), &wmsts_response.u.gw_pp.u.deliver.address.digits, wmsts_response.u.gw_pp.u.deliver.address.number_of_digits);
+    } else {
+        memcpy(&sms_message->number, &wmsts_response.u.gw_pp.u.deliver.address.digits, wmsts_response.u.gw_pp.u.deliver.address.number_of_digits);
+    }
+
+    /* SMS Validity Period. */
+    sms_coding_decode_gw_validity_period(&wmsts_response.u.gw_pp.u.deliver.timestamp, &sms_message->validity);
+
+    /* SMS Content DCS. */
+    sms_coding_decode_gw_dcs(&wmsts_response.u.gw_pp.u.deliver.dcs, &sms_message->content_dcs);
+
+    /* SMS Content. */
+    sms_message->content_len = wmsts_response.u.gw_pp.u.deliver.user_data.sm_len;
+    memcpy(&sms_message->content, &wmsts_response.u.gw_pp.u.deliver.user_data.sm_data, sms_message->content_len);
 
 
+#ifdef SMS_DEBUG_MODE
+    SMS_ERR("=====DELIVER=====\n");
+    _print_sms(sms_message);
+#endif
+
+    return SMS_SUCCESS;
 }
