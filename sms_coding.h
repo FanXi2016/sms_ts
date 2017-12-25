@@ -45,7 +45,7 @@ typedef struct sms_validity_period_s {
 
 typedef struct sms_message_s {
     uint8 smsc[32];
-    uint8 number[32];
+    uint8 telnumber[32];
 
     sms_validity_period_s_type validity;
 
