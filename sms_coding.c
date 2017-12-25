@@ -443,8 +443,15 @@ int sms_coding_pdu_submit(char *address, char *content, uint32 content_len, sms_
     return SMS_SUCCESS;
 }
 
-
-
+/** @brief sms_coding_decode_smsc
+ *
+ *  decode SMSC(short message service center number) from pdu message.
+ *
+ *  @param[in] pdu_message: the pointer to point pdu message head.
+ *  @param[out] smsc: SMSC(sms center number) of String.
+ *
+ *  @return[uint8]: function state, success or failed.
+ */
 static uint8 sms_coding_decode_smsc(uint8 *pdu_message, uint8 *smsc)
 {
     wms_address_s_type wmsts_addr;
@@ -487,21 +494,19 @@ static uint8 sms_coding_decode_smsc(uint8 *pdu_message, uint8 *smsc)
     } else {  /* 4-Bit */
         SMS_ERR("Info, number_of_digits = %d.", wmsts_addr.number_of_digits);
         for (idx = 0; idx < wmsts_addr.number_of_digits; idx++) {
-            SMS_ERR("Info, digits[%d] = 0x%2X.", idx, wmsts_addr.digits[idx]);
+            SMS_ERR("Info, SMSC digits[%d] = 0x%2X.", idx, wmsts_addr.digits[idx]);
         }
 
         for (idx = 0; idx < (wmsts_addr.number_of_digits - 1); idx++) {
             ch_low = (wmsts_addr.digits[idx] & 0x0F);
             ch_high = ((wmsts_addr.digits[idx] & 0xF0) >> 4);
-#if 0
-            if (ch > 0 && ch < 9) {
-                *(smsc_ptr + idx) = ch + 0x30;  /* '0' = 0x30 */
+
+            if ((ch_low > 0) && (ch_low < 9)) {
+                *(smsc_ptr++) = ch_low + 0x30;
             }
 
-            ch = ((wmsts_addr.digits[idx] & 0xF0) >> 4);
-#endif
-            if ((wmsts_addr.digits[idx] > 0x00) && (wmsts_addr.digits[idx] < 0x09)) {
-                *(smsc_ptr + idx) = wmsts_addr.digits[idx] + 0x30;  /* '0' = 0x30 */
+            if ((ch_high > 0) && (ch_high < 9)) {
+                *(smsc_ptr++) = ch_high + 0x30;
             }
         }
     }
@@ -509,9 +514,20 @@ static uint8 sms_coding_decode_smsc(uint8 *pdu_message, uint8 *smsc)
     return shift;
 }
 
+/** @brief sms_coding_decode_telnumber
+ *
+ *  decode Tel-Number from pdu message.
+ *
+ *  @param[in] wmsts_addr: WMS TS format address message.
+ *  @param[out] telnumber: Tel-Nmber of String.
+ *
+ *  @return[uint8]: function state, success or failed.
+ */
 static uint8 sms_coding_decode_telnumber(wms_address_s_type *wmsts_addr, uint8 *telnumber)
 {
     uint8 *num_ptr = NULL;
+    uint8 ch_high = 0;
+    uint8 ch_low = 0;
     uint32 idx = 0;
 
     if (wmsts_addr == NULL || telnumber == NULL) {
@@ -528,10 +544,22 @@ static uint8 sms_coding_decode_telnumber(wms_address_s_type *wmsts_addr, uint8 *
 
     if (wmsts_addr->digit_mode == WMS_DIGIT_MODE_8_BIT) {  /* GSM 7-bit */
         /* Need Coding. */
-    } else {
+    } else {  /* 4-Bit */
+        SMS_ERR("Info, number_of_digits = %d.", wmsts_addr->number_of_digits);
         for (idx = 0; idx < wmsts_addr->number_of_digits; idx++) {
-            if ((wmsts_addr->digits[idx] > 0x00) && (wmsts_addr->digits[idx] < 0x09)) {
-                *(num_ptr + idx) = wmsts_addr->digits[idx] + 0x30;  /* '0' = 0x30 */
+            SMS_ERR("Info, Tel number's digits[%d] = 0x%2X.", idx, wmsts_addr->digits[idx]);
+        }
+
+        for (idx = 0; idx < (wmsts_addr->number_of_digits - 1); idx++) {
+            ch_low = (wmsts_addr->digits[idx] & 0x0F);
+            ch_high = ((wmsts_addr->digits[idx] & 0xF0) >> 4);
+
+            if ((ch_low > 0) && (ch_low < 9)) {
+                *(num_ptr++) = ch_low + 0x30;
+            }
+
+            if ((ch_high > 0) && (ch_high < 9)) {
+                *(num_ptr++) = ch_high + 0x30;
             }
         }
     }
@@ -539,11 +567,9 @@ static uint8 sms_coding_decode_telnumber(wms_address_s_type *wmsts_addr, uint8 *
     return SMS_SUCCESS;
 }
 
-
-
 /** @brief sms_decode_pdu_deliver
  *
- *  dncode pdu messsage to sms message format, 3GPP 23.040 [9.2].
+ *  decode pdu messsage to sms message format, 3GPP 23.040 [9.2].
  *
  *  @param[in] pdu: Raw PDU message.
  *  @param[in] pdu_len: PDU message length.
