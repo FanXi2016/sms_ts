@@ -165,7 +165,6 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
     return SMS_SUCCESS;
 }
 
-#if 0
 /** @brief sms_coding_decode_address
  *
  *  
@@ -175,61 +174,48 @@ static int sms_coding_encode_address(char *str_addr, wms_address_s_type *wmsts_a
  *
  *  @return[integer]: function process state, failed or success.
  */
-static int sms_coding_decode_address(uint8 *pdu_addr, uint8 *decode_addr)
+static uint8 sms_coding_decode_address(uint8 *pdu_message, wms_address_s_type *wmsts_addr)
 {
-    uint8 addr_idx = 0;
+    uint8 *pdu_ptr = NULL;
     uint8 addr_length = 0;
-    uint8 *addr_ptr = NULL;
-    wms_address_s_type wmsts_addr;
+    uint8 shift = 0;
 
-    if (pdu_addr == NULL || decode_addr == NULL) {
+    if (pdu_message == NULL || wmsts_addr == NULL) {
         SMS_ERR("Err, Addrees or PUD address is NULL pointer.");
         return SMS_ERR_NULL;
     }
 
-    memset(&wmsts_addr, 0, sizeof(wms_address_s_type));
-
-    addr_ptr = pdu_addr;
-    addr_length = *addr_ptr;
+    pdu_ptr = pdu_message;
+    addr_length = *pdu_ptr;
     if (addr_length > 24) {  /* 3GPP 23.040 9.1.2.5 - 12 octets */
         SMS_ERR("Err, Addrees is too long(%d).", addr_length);
-        return SMS_ERR_LENGTH;
+        return 0;
     } else if (addr_length <= 0) {
         SMS_ERR("Err, Addrees is empty(%d).", addr_length);
-        return SMS_ERR_LENGTH;
+        return 0;
     } else {
         /* Nothing to do. */
     }
-    addr_ptr++;
+    pdu_ptr++;
 
-    wmsts_addr.number_type = (wms_number_type_e_type)((*addr_ptr & 0x70) >> 4);
-    wmsts_addr.number_plan = (wms_number_plan_e_type)(*addr_ptr & 0x0F);
-    addr_ptr++;
+    wmsts_addr->number_type = (wms_number_type_e_type)((*pdu_ptr & 0x70) >> 4);
+    wmsts_addr->number_plan = (wms_number_plan_e_type)(*pdu_ptr & 0x0F);
+    pdu_ptr++;
 
-    if (wmsts_addr.number_type == WMS_NUMBER_ALPHANUMERIC) {  /* GSM 7-bit */
-        wmsts_addr.digit_mode = WMS_DIGIT_MODE_8_BIT;
+    if (wmsts_addr->number_type == WMS_NUMBER_ALPHANUMERIC) {  /* GSM 7-bit */
+        wmsts_addr->digit_mode = WMS_DIGIT_MODE_8_BIT;
 
         /* Need Coding. */
     } else {
-        wmsts_addr.digit_mode = WMS_DIGIT_MODE_4_BIT;
-        wmsts_addr.number_of_digits = addr_length;
+        wmsts_addr->digit_mode = WMS_DIGIT_MODE_4_BIT;
+        wmsts_addr->number_of_digits = addr_length;
 
-        for (addr_idx = 0; addr_idx < wmsts_addr.number_of_digits; addr_idx++) {
-            wmsts_addr.digits[addr_idx] = (*(addr_ptr + addr_idx) & 0x0F) + '0';
-            wmsts_addr.digits[addr_idx + 1] = ((*(addr_ptr + addr_idx) & 0xF0) >> 4) + '0';
-        }
+        memcpy(&wmsts_addr->digits, pdu_ptr, wmsts_addr->number_of_digits);
+        shift = addr_length + 1;
     }
 
-    if (wmsts_addr.number_type == WMS_NUMBER_INTERNATIONAL) {  /* International number, add '+' in number front. */
-        *decode_addr = '+';
-        memcpy((decode_addr + 1), &wmsts_addr.digits, wmsts_addr.number_of_digits);
-    } else {
-        memcpy(decode_addr, &wmsts_addr.digits, wmsts_addr.number_of_digits);
-    }
-
-    return SMS_SUCCESS;
+    return shift;
 }
-#endif
 
 /** @brief sms_coding_encode_gw_dcs
  *
@@ -471,7 +457,8 @@ static uint8 sms_coding_decode_smsc(uint8 *pdu_message, uint8 *smsc)
 
     if (*pdu_ptr > 0) {
         memset(&wmsts_addr, 0, sizeof(wms_address_s_type));
-        shift = wms_ts_decode_address(pdu_ptr, &wmsts_addr);
+        //shift = wms_ts_decode_address(pdu_ptr, &wmsts_addr);
+        shift = sms_coding_decode_address(pdu_ptr, &wmsts_addr);
         if (shift == 0) {
             SMS_ERR("Err, SMSC number is too long.");
             return 0;
