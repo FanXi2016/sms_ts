@@ -11,6 +11,15 @@
 
 //#define SMS_DEBUG_MODE
 
+
+/** @brief sms_coding_pdu_submit
+ *
+ *  encode sms data to pdu submit format, 3GPP 23.040 [9.2].
+ *
+ *  @param[in] pdu_message: 
+ *
+ *  @return
+ */
 static e_sms_error_enum sms_core_encode_gw_address(smsts_address_s_type *smsts_addr, uint8 *addr, uint8 addr_len)
 {
     if (smsts_addr == NULL || addr == NULL) {
@@ -26,6 +35,14 @@ static e_sms_error_enum sms_core_encode_gw_address(smsts_address_s_type *smsts_a
     return SMS_E_SUCCESS;
 }
 
+/** @brief sms_coding_pdu_submit
+ *
+ *  encode sms data to pdu submit format, 3GPP 23.040 [9.2].
+ *
+ *  @param[in] pdu_message: 
+ *
+ *  @return
+ */
 static e_sms_error_enum sms_core_encode_gw_user_data(smsts_gw_user_data_s_type *user_data, uint8 *content, uint32 content_len)
 {
     if (user_data == NULL || content == NULL) {
@@ -103,12 +120,10 @@ int sms_core_pdu_submit(sms_message_s_type *sms_message, pdu_message_s_type *pdu
         return err;
     }
 
-
     /* Encode to TPDU data. */
-    err = sms_ts_encode_tpdu();
+    err = sms_ts_tpdu_submit();
     if (err != SMS_E_SUCCESS) {
         return err;
     }
-
     return SMS_E_SUCCESS;
 }

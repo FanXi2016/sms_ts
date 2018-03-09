@@ -9,11 +9,31 @@
 
 
 
-
-static e_sms_error_enum sms_ts_encode_address(uint8 *addr, uint8 *pdu)
+/** @brief sms_ts_encode_address
+ *
+ *  encode sms data to pdu submit format, 3GPP 23.040 [9.1.2.5].
+ *
+ *  @param[in] pdu_message: 
+ *
+ *  @return
+ */
+static e_sms_error_enum sms_ts_encode_address(smsts_address_s_type *addr, uint8 *pdu)
 {
     uint8 *ptr_addr = addr;
+    uint8 pdu_addr_len = 0;
     uint8 idx = 0;
+
+    if (addr->addr_len > SMSTS_ADDRESS_MAX_LEN) {
+        return SMS_E_TS_ADDR_ERR;
+    }
+
+    if (addr->number_type == E_SMSTS_NUMBER_TYPE_ALPHANUMERIC) {
+        pdu_addr_len = addr->addr_len;  /* Need Change, XI Fan */
+    } else {
+        pdu_addr_len = addr->addr_len;
+    }
+
+    
 
     while (*ptr_addr) {
         if (*(ptr_addr + 1)) {
@@ -33,7 +53,14 @@ static e_sms_error_enum sms_ts_encode_address(uint8 *addr, uint8 *pdu)
 
 
 
-
+/** @brief sms_ts_tpdu_submit
+ *
+ *  encode sms data to pdu submit format, 3GPP 23.040 [9.2].
+ *
+ *  @param[in] pdu_message: 
+ *
+ *  @return
+ */
 e_sms_error_enum sms_ts_tpdu_submit(smsts_gw_submit_s_type *sms_submit, uint8 *tpdu)
 {
     uint8 pos = 0;
@@ -46,13 +73,13 @@ e_sms_error_enum sms_ts_tpdu_submit(smsts_gw_submit_s_type *sms_submit, uint8 *t
     if (sms_submit->message_type_indicator == SMSTS_MESSAGE_TYPE_SUBMIT) {
         tpdu[pos] = 0x01;  /* TP-MTI: bit1, bit0 */
     } else {
-        return SMS_E_MESSAGE_TYPE_ERR;
+        return SMS_E_TS_MESSAGE_TYPE_ERR;
     }
 
     tpdu[pos] |= sms_submit->reject_duplicates ? 0x04 : 0x00;  /* TP-RD: bit2 */
 
     if (sms_submit->validity_period_format >= E_SMSTS_VALIDITY_MAX) {
-        return SMS_E_VALIDITY_ERR;
+        return SMS_E_TS_VALIDITY_ERR;
     } else {
         tpdu[pos] |= sms_submit->validity_period_format << 3;  /* TP-VPF: bit4, bit3 */
     }
@@ -67,8 +94,4 @@ e_sms_error_enum sms_ts_tpdu_submit(smsts_gw_submit_s_type *sms_submit, uint8 *t
 
     pos++;
     /* TP-DA */
-    
-
-
-
 }

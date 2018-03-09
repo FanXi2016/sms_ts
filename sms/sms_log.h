@@ -12,8 +12,9 @@
 typedef enum {
     SMS_E_SUCCESS = 0,
     SMS_E_INVALID_PARAM = 1,   
-    SMS_E_MESSAGE_TYPE_ERR = 2,
-    SMS_E_VALIDITY_ERR = 3,
+    SMS_E_TS_MESSAGE_TYPE_ERR = 2,
+    SMS_E_TS_VALIDITY_ERR = 3,
+    SMS_E_TS_ADDR_ERR = 4,
 } e_sms_error_enum;
 
 

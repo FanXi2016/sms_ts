@@ -2,7 +2,7 @@
 #define _SMS_TS_H_
 
 
-#define SMSTS_ADDRESS_MAX_LEN 48
+#define SMSTS_ADDRESS_MAX_LEN 20  /* 2-12octets */
 #define SMSTS_USER_DATA_MAX_LEN 255
 
 
