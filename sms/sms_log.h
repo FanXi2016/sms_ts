@@ -1,6 +1,23 @@
 #ifndef _SMS_LOG_H_
 #define _SMS_LOG_H_
 
+
+#define SMS_SUCCESS (0)  /* Success */
+#define SMS_ERR_NULL (-1)  /* NULL Pointer */
+#define SMS_ERR_LENGTH (-2)  /* Empty Message lenght */
+#define SMS_ERR_ADDR_NON_DIGIT (-3)  /* SMS Address Non-digit */
+#define SMS_ERR_SUBMIT (-4)  /* Encode SMS to subimt format */
+#define SMS_ERR_DELIVER (-5)  /* Decode PDU Messageto SMS. */
+
+typedef enum {
+    SMS_E_SUCCESS = 0,
+    SMS_E_INVALID_PARAM = 1,   
+    SMS_E_MESSAGE_TYPE_ERR = 2,
+    SMS_E_VALIDITY_ERR = 3,
+} e_sms_error_enum;
+
+
+/*========================================*/
 /* SMS Marco */
 #define SMS_LOG
 
@@ -36,6 +53,6 @@ do { \
 #define SMS_INFO(tag,...) do {} while(0)
 #define SMS_DEBUG(tag,...) do {} while(0)
 #endif
-
+/*========================================*/
 
 #endif /* _SMS_LOG_H_ */
